@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import "./globals.css"
+import Sidebar from "@/components/Sidebar"
 
 export const metadata: Metadata = {
   title: "PM Workstation",
@@ -13,7 +14,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full">
-      <body className="min-h-full bg-gray-950 text-gray-100">{children}</body>
+      <body className="h-full flex bg-gray-950 text-gray-100">
+        <aside className="w-56 flex-shrink-0 border-r border-gray-800 p-4 overflow-hidden">
+          <Sidebar />
+        </aside>
+        <main className="flex-1 overflow-auto">{children}</main>
+      </body>
     </html>
   )
 }
