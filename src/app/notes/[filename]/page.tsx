@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import dynamic from "next/dynamic"
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false })
@@ -30,7 +30,7 @@ export default function NotePage({
       .catch(() => setLoading(false))
   }, [filename])
 
-  const save = async () => {
+  const save = useCallback(async () => {
     if (!filename) return
     await fetch(`/api/notes/${filename}`, {
       method: "POST",
@@ -39,7 +39,19 @@ export default function NotePage({
     })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
-  }
+  }, [filename, content])
+
+  // Cmd+S / Ctrl+S keyboard shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault()
+        save()
+      }
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [save])
 
   if (loading) {
     return <div className="p-8 text-gray-400">Loading…</div>
@@ -55,6 +67,7 @@ export default function NotePage({
         <button
           onClick={save}
           className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium"
+          title="Save (⌘S)"
         >
           {saved ? "Saved!" : "Save"}
         </button>

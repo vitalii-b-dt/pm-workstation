@@ -112,6 +112,16 @@ export default function Sidebar() {
         </ul>
       </section>
 
+      {/* Canvas */}
+      <section>
+        <Link
+          href="/canvas"
+          className="text-xs font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-200 block py-1"
+        >
+          Canvas
+        </Link>
+      </section>
+
       {/* Notes */}
       <section className="flex flex-col gap-2 min-h-0">
         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">

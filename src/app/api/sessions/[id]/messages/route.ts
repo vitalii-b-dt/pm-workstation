@@ -1,0 +1,11 @@
+import { client } from "@/lib/opencode"
+import { NextResponse } from "next/server"
+
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const res = await client.session.messages({ sessionID: id })
+  return NextResponse.json(res.data ?? [])
+}

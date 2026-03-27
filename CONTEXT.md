@@ -126,18 +126,42 @@ OpenCode is the agent/orchestration layer. PM Workstation is a web client that c
 
 ---
 
-## V1 Scope (Spike → V0.1)
+## Value Proposition
 
-### In scope
-- [ ] Health check / connection status indicator
-- [ ] Session list and session creation
-- [ ] Agent chat interface with streaming responses
-- [ ] Markdown editor for `memories/` files
-- [ ] Notes/file sidebar (list `memories/*.md`)
-- [ ] Persistent layout (sidebar + main area)
+> PM Workstation is a purpose-built writing and planning environment for AI-enabled PMs so that writing a PRD, spec, or brief goes from a multi-tool scramble to a single focused session with an agent that already knows your context.
 
-### Out of scope for v1
-- Jira browser / external tool connectors
+Locked: 2026-03-27.
+
+---
+
+## Spike (Done — 2026-03-27)
+
+All four spike sessions completed successfully. Key deviations from RESEARCH.md discovered:
+- API paths have no `/v1/` prefix: `/global/health`, `/session`, `/session/{id}/prompt_async`
+- SSE event types differ: streaming uses `message.part.delta` (not `message.part.created`), done signal is `session.idle` (not `session.updated`)
+- `prompt_async` in the SDK is camelCase `promptAsync`
+
+---
+
+## V1 Scope
+
+### Spike (completed)
+- [x] Health check / connection status indicator
+- [x] Session list and session creation
+- [x] Agent chat interface with streaming responses
+- [x] Markdown editor for `memories/` files
+- [x] Notes/file sidebar (list `memories/*.md`)
+- [x] Persistent layout (sidebar + main area)
+
+### v0.1 (next)
+- [ ] **Session history** — load prior messages when opening an existing session
+- [ ] **File preview canvas** — open any workspace file and view it rendered as markdown (no more VS Code for previewing agent output)
+- [ ] **Reassess Memory button** — in the notes panel, triggers a canned agent prompt to review the session and suggest memory file updates
+- [ ] **Cmd+S to save notes** — keyboard shortcut in addition to Save button
+
+### Out of scope for v0.1
+- Jira / Confluence / GitHub connectors (v0.2+)
+- Agent-triggered automatic memory file writes (v0.2+)
 - Roadmap or project board views
 - User onboarding flow
 - Auth / multi-user
@@ -165,13 +189,11 @@ The agent's context (memories, skills, AGENTS.md) lives in the existing `pm-work
 
 ## Open Questions (unresolved)
 
-1. **Value proposition statement** — not yet written. Must be one sentence: "PM Workstation is [X] for [Y] so that [Z]." Write this before building anything beyond the spike.
+1. **`client.file.write()` exists?** — Confirmed: not present. `fs` module in API routes is the permanent approach.
 
-2. **Does `client.file.write()` exist?** — Research suggests the SDK is read-heavy. If write is absent, use `fs` in API routes as the permanent approach (not a workaround).
+2. **Localhost web app vs. packaged `.app`** — unknown whether target users will tolerate a browser-based tool or require a native app feel. Validate with the first external user.
 
-3. **Localhost web app vs. packaged `.app`** — unknown whether target users will tolerate a browser-based tool or require a native app feel. Validate with the first external user.
-
-4. **Name** — "PM Workstation" is a working title. A real name and GitHub repo slug TBD before any public sharing.
+3. **Name** — "PM Workstation" is a working title. A real name and GitHub repo slug TBD before any public sharing.
 
 ---
 
