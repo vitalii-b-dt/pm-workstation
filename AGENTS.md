@@ -1,195 +1,139 @@
 # PM Workstation — Agent Instructions
 
-You are a coding agent working on **PM Workstation**: a purpose-built desktop application for Product Managers that wraps the OpenCode agent via its SDK, providing a PM-native UI instead of a raw terminal interface.
+You are a coding agent working on **PM Workstation**: a purpose-built environment for AI-enabled Product Managers. PM Workstation is a **fork of `sst/opencode`** with PM-native UI features added directly to the SolidJS codebase.
 
-Read `CONTEXT.md` and `RESEARCH.md` before starting any coding task. Read `SPIKE.md` to understand the current build plan and which session you are in.
+Read `CONTEXT.md` before starting any coding task. Read `SPIKE.md` to understand the current build phase and what has been completed.
 
 ---
 
 ## What This Project Is
 
-A **Next.js web client** (React, App Router, TypeScript, Tailwind CSS) that:
+A fork of `sst/opencode` that adds PM-specific UI features on top of OpenCode's existing interface:
 
-1. Connects to a locally running **OpenCode server** (`opencode serve --port 4096`) via `@opencode-ai/sdk`
-2. Provides a **PM-native UI** — not a generic AI chat, not a code editor
-3. Reads and writes **local markdown files** (`memories/*.md`) as the persistent PM context layer
-4. Renders agent responses with PM-appropriate structure (not raw terminal output)
+1. **Memory Editor panel** — edit `memories/*.md` files from within the OpenCode UI
+2. **Canvas file preview** — view any workspace `.md` file rendered as markdown (not raw diff)
+3. **Reassess Memory button** — one-click canned prompt to review session and suggest memory updates
 
-This is a **localhost web app** for personal use in v1. No auth, no cloud, no deployment target beyond the local machine.
+This is **not** a separate app. It is OpenCode itself, with PM features added natively.
 
 ---
 
-## Tech Stack
+## Repository Layout
+
+There are **three separate local directories** — never confuse them:
+
+| Directory | What it is |
+|---|---|
+| `~/Projects/pm-workstation` | This repo. Context docs (`CONTEXT.md`, `AGENTS.md`, etc.) + the retired Next.js spike app. Not the active codebase. |
+| `~/Projects/opencode-fork` | The forked OpenCode source. This is where all active development happens. |
+| `~/Projects/pm-workspace` | The PM agent context directory. Contains `memories/`, `AGENTS.md`, skills. The OpenCode server runs here. |
+
+**All coding tasks happen in `~/Projects/opencode-fork`.**
+
+---
+
+## Tech Stack (OpenCode fork)
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Framework | Next.js 14+ App Router | TypeScript, `src/` directory |
-| Styling | Tailwind CSS | Utility-first, no component library in v1 |
-| Agent SDK | `@opencode-ai/sdk` v2 | `createOpencodeClient` from `@opencode-ai/sdk/v2/client` |
-| Streaming | Native `EventSource` | Browser API, no wrapper needed |
-| Editor | `@uiw/react-md-editor` | Markdown editor with preview, React-native |
-| File I/O | SDK `client.file.read/list` + `fs` in API routes | SDK for reads, `fs` module for writes in API routes |
+| UI framework | SolidJS | Not React — use SolidJS primitives (`createSignal`, `createEffect`, `For`, etc.) |
+| Styling | Tailwind CSS v4 | Utility-first, same conventions as the rest of the app |
+| Build | Vite | `packages/app` |
+| Language | TypeScript | Strict mode |
+| Runtime | Bun | Package manager and script runner |
 
 ---
 
-## Project Structure (target)
+## Key Directories Inside the Fork
 
 ```
-pm-workstation/
-├── AGENTS.md              ← this file
-├── CONTEXT.md             ← product vision, decisions, architecture
-├── SPIKE.md               ← session-by-session build plan
-├── RESEARCH.md            ← OpenCode SDK API reference and findings
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx         ← root layout with sidebar
-│   │   ├── page.tsx           ← home / health check
-│   │   ├── sessions/
-│   │   │   └── [sessionId]/
-│   │   │       └── page.tsx   ← chat view for a session
-│   │   └── notes/
-│   │       ├── page.tsx       ← list of memory files
-│   │       └── [filename]/
-│   │           └── page.tsx   ← markdown editor for a file
-│   ├── api/
-│   │   ├── sessions/
-│   │   │   ├── route.ts       ← GET (list) + POST (create)
-│   │   │   └── [id]/
-│   │   │       └── prompt/
-│   │   │           └── route.ts ← POST (send message async)
-│   │   └── notes/
-│   │       └── [filename]/
-│   │           └── route.ts   ← GET (read) + POST (write)
-│   ├── lib/
-│   │   ├── opencode.ts        ← SDK client singleton
-│   │   └── constants.ts       ← WORKSPACE_DIR, SERVER_URL
-│   └── components/
-│       ├── Sidebar.tsx
-│       ├── ChatView.tsx
-│       ├── MessageStream.tsx
-│       └── NoteEditor.tsx
+opencode-fork/
+├── packages/
+│   ├── app/                          ← SolidJS web UI (where PM features go)
+│   │   ├── src/
+│   │   │   ├── pages/
+│   │   │   │   ├── layout.tsx        ← root layout
+│   │   │   │   ├── layout/
+│   │   │   │   │   └── sidebar-items.tsx  ← sidebar nav items (add Memory Notes here)
+│   │   │   │   └── session/
+│   │   │   │       └── session-side-panel.tsx  ← side panel tabs (add Memory tab here)
+│   │   │   └── components/           ← shared UI components
+│   │   └── package.json
+│   ├── opencode/                     ← server-side logic (Go/Bun)
+│   └── sdk/                          ← @opencode-ai/sdk (do not modify)
 ```
 
 ---
 
-## Critical Constants
+## PM Feature Insertion Points
 
-```typescript
-// src/lib/constants.ts
-export const SERVER_URL = "http://127.0.0.1:4096"
-export const WORKSPACE_DIR = "/Users/vitalii.batyr/Projects/pm-workspace"
-export const MEMORIES_DIR = `${WORKSPACE_DIR}/memories`
-```
+These are the exact files to modify for each PM feature. Keep changes **minimal and confined** to reduce rebase conflicts.
 
-`WORKSPACE_DIR` is the **pm-workspace** directory (the existing PM workspace with `memories/` files), not this project's own directory. The OpenCode agent uses that workspace as its working context.
-
----
-
-## SDK Client Singleton
-
-```typescript
-// src/lib/opencode.ts
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
-import { SERVER_URL, WORKSPACE_DIR } from "./constants"
-
-export const client = createOpencodeClient({
-  baseUrl: SERVER_URL,
-  directory: WORKSPACE_DIR,
-})
-```
-
-Use this singleton everywhere. Do not instantiate multiple clients.
+| Feature | File | What to add |
+|---|---|---|
+| Memory Notes in sidebar | `packages/app/src/pages/layout/sidebar-items.tsx` | New sidebar section listing `memories/*.md` files |
+| Memory Editor tab | `packages/app/src/pages/session/session-side-panel.tsx` | New "Memory" tab with markdown editor |
+| Canvas file preview | `packages/app/src/pages/session/session-side-panel.tsx` | Rendered markdown view for any workspace file |
+| Reassess Memory button | `packages/app/src/pages/layout/sidebar-items.tsx` | Button that fires a canned prompt |
 
 ---
 
-## SSE Pattern (streaming agent responses)
-
-The SDK does not wrap SSE — use native `EventSource` directly in client components:
-
-```typescript
-useEffect(() => {
-  const es = new EventSource(
-    `${SERVER_URL}/event?directory=${encodeURIComponent(WORKSPACE_DIR)}`
-  )
-  es.onmessage = (e) => {
-    const event = JSON.parse(e.data)
-    if (event.type === "message.part.created") {
-      // append event.properties to message state
-    }
-  }
-  return () => es.close()
-}, [])
-```
-
-Key event types to handle:
-- `server.connected` — SSE connection established
-- `server.heartbeat` — keep-alive, ignore
-- `message.part.created` — new text chunk from agent, append to UI
-- `session.updated` — session metadata changed
-
----
-
-## File Write Pattern
-
-`client.file` may be read-only. For writing, use the `fs` module inside Next.js API routes (they run in Node.js):
-
-```typescript
-// src/app/api/notes/[filename]/route.ts
-import { writeFileSync } from "fs"
-import { join } from "path"
-import { MEMORIES_DIR } from "@/lib/constants"
-
-export async function POST(req: Request, { params }: { params: { filename: string } }) {
-  const { content } = await req.json()
-  const filePath = join(MEMORIES_DIR, params.filename)
-  writeFileSync(filePath, content, "utf-8")
-  return Response.json({ ok: true })
-}
-```
-
----
-
-## What to Build First
-
-Follow `SPIKE.md` exactly. The spike has 4 sessions in strict order:
-
-1. **Session 1** — Scaffold, SDK connection, health check, session list
-2. **Session 2** — Send prompt + stream response via SSE
-3. **Session 3** — Markdown editor wired to `memories/` files
-4. **Session 4** — Assemble PM layout (sidebar + chat + editor)
-
-Do not skip ahead. Each session validates a critical assumption before the next one builds on it.
-
----
-
-## Prerequisites Before Running
-
-The OpenCode server must be running before the Next.js app starts:
+## Dev Workflow
 
 ```bash
+# Run the dev server (hot-reload UI against a running OpenCode server)
+cd ~/Projects/opencode-fork
+bun run dev --filter @opencode-ai/app
+
+# The OpenCode server must be running separately:
 opencode serve --port 4096
+# Run in: ~/Projects/pm-workspace
 ```
 
-This must be run in the `pm-workspace` directory (or with `--cwd /Users/vitalii.batyr/Projects/pm-workspace`).
+---
 
-The Next.js app connects to `http://127.0.0.1:4096`. If the server is not running, all SDK calls will fail with connection errors.
+## Rebase Strategy
+
+When upstream `sst/opencode` has diverged significantly:
+
+```bash
+cd ~/Projects/opencode-fork
+git fetch upstream
+git rebase upstream/main
+# Resolve conflicts — PM changes are confined to the insertion point files above
+bun run build --filter @opencode-ai/app   # verify build passes
+```
+
+Rebase cadence: every ~2 weeks, or on-demand when a critical upstream fix is needed.
+
+---
+
+## PM Workspace Constants
+
+The OpenCode server always runs against the PM workspace:
+
+```
+PM workspace:  /Users/vitalii.batyr/Projects/pm-workspace
+memories dir:  /Users/vitalii.batyr/Projects/pm-workspace/memories
+```
+
+Any code that reads `memories/*.md` files uses these absolute paths.
 
 ---
 
 ## Conventions
 
-- **No auth** in v1 — localhost trust, no `OPENCODE_SERVER_PASSWORD`
-- **No error handling polish** — `console.error` is fine for the spike; proper error UI comes in v0.1
-- **No design system** — Tailwind utility classes only, no shadcn/ui or similar in the spike
-- **Server components by default** — only add `"use client"` where SSE subscriptions or user interaction requires it
-- **No tests** in the spike — validate by running, not by test suite
-- All file paths are **absolute** — never relative paths when calling SDK or `fs`
+- **SolidJS, not React** — use `createSignal`/`createEffect`/`For`/`Show`, not `useState`/`useEffect`/`.map`
+- **No new dependencies without reason** — the fork already has a markdown renderer; use it
+- **Mark PM additions with comments** — `// PM WORKSTATION:` prefix on added blocks makes rebasing easier
+- **No auth** in v1 — localhost trust
+- **No tests** in v1 — validate by running
 
 ---
 
 ## Key References
 
-- Full SDK API surface → `RESEARCH.md`
 - Architecture decisions and rationale → `CONTEXT.md`
-- Session-by-session build plan → `SPIKE.md`
-- OpenCode SDK source: `https://github.com/sst/opencode` (packages/sdk)
+- Build phases and session history → `SPIKE.md`
+- OpenCode upstream → `https://github.com/sst/opencode`
+- Fork → `https://github.com/vitalii-b-dt/opencode`

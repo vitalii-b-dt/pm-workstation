@@ -69,38 +69,52 @@ The closest existing thing is a hand-crafted OpenCode workspace (like `pm-worksp
 
 ## Architecture
 
-### Core Principle: Sidecar, not fork
+### Core Principle: Fork OpenCode, add PM features natively
 
-OpenCode is the agent/orchestration layer. PM Workstation is a web client that connects to it. We do not fork OpenCode source code.
+**Decision made: 2026-03-30**
 
-**Why not fork:**
-- OpenCode has ~10K commits on `dev`, daily merges, no stable semver on internal APIs
-- A hard fork becomes unmaintainable in 2–3 months (estimated 4–8 hrs/week rebasing)
-- The official `@opencode-ai/sdk` provides everything needed for a custom client
+PM Workstation is a fork of `sst/opencode`. PM-specific features (memory editor, canvas file preview, reassess-memory button) are added directly to the SolidJS UI. The fork is rebased against upstream periodically using agent-assisted automation.
 
-**Upgrade path:** Bump `@opencode-ai/sdk` version in `package.json`. No rebasing.
+**Why fork (not sidecar):**
+- The only way to inject UI into OpenCode is to fork — there is no client-side plugin API
+- A sidecar app (separate browser tab) feels second-class and duplicates already-polished OpenCode UI
+- Agent-driven rebasing makes the maintenance cost manageable (~30-60 min every 2 weeks)
+- Forking gives 95% of OpenCode's UI for free: streaming, tool visualization, keyboard shortcuts, file tree, all polish
+- Building an equivalent "own wrapper" would take 5-8 sessions vs. 2-3 sessions for the fork
+
+**Rebase strategy:**
+- Fork lives at `github.com/vitalii-b-dt/opencode` (forked from `sst/opencode`)
+- PM-specific changes are confined to clearly marked files/sections to minimize merge conflicts
+- Rebase against `sst/opencode main` every 2 weeks (or on-demand for critical upstream fixes)
+- High-conflict files (historically): `packages/app/src/pages/layout/sidebar-items.tsx`, `packages/app/src/pages/layout.tsx`
+- Agent handles the rebase; human reviews and runs the build
+
+**OpenCode tech stack (for PM feature development):**
+- UI framework: SolidJS (not React)
+- Styling: Tailwind CSS v4
+- Build: Vite
+- Language: TypeScript
 
 ### v1 Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│           PM Workstation (Next.js)           │
-│                                              │
-│  ┌──────────┐  ┌──────────┐  ┌───────────┐ │
-│  │  Notes   │  │  Chat    │  │  Sidebar  │ │
-│  │  Editor  │  │  View    │  │  (nav)    │ │
-│  └────┬─────┘  └────┬─────┘  └─────┬─────┘ │
-│       │              │              │        │
-│  ┌────▼──────────────▼──────────────▼─────┐ │
-│  │         Next.js API Routes             │ │
-│  │   /api/sessions  /api/notes            │ │
-│  └────────────────┬───────────────────────┘ │
-└───────────────────┼─────────────────────────┘
-                    │ @opencode-ai/sdk + fetch
+┌─────────────────────────────────────────────────────────────┐
+│                PM Workstation (forked OpenCode)              │
+│                                                              │
+│  ┌──────────────────┐  ┌───────────────────────────────────┐│
+│  │  OpenCode native │  │     PM additions (new)            ││
+│  │  UI (SolidJS)    │  │                                   ││
+│  │                  │  │  - Memory Editor panel            ││
+│  │  - Chat / stream │  │    (sidebar tab → edit *.md)      ││
+│  │  - File tree     │  │  - Canvas file preview            ││
+│  │  - Tool vis.     │  │    (rendered markdown)            ││
+│  │  - Keyboard nav  │  │  - Reassess Memory button         ││
+│  └──────────────────┘  └───────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+                    │ REST + SSE (internal)
                     │
 ┌───────────────────▼─────────────────────────┐
-│         OpenCode Server (port 4096)          │
-│         opencode serve --port 4096           │
+│         OpenCode Server (same binary)        │
 │                                              │
 │  REST API + SSE event stream                 │
 │  Working directory: ~/Projects/pm-workspace  │
@@ -117,12 +131,14 @@ OpenCode is the agent/orchestration layer. PM Workstation is a web client that c
 
 ### Key technical facts
 
-- **Server port**: 4096 (default attempt, falls back to OS-assigned). Hard-code 4096 and always launch with `--port 4096`.
-- **CORS**: `http://localhost:*` is whitelisted by the OpenCode server. Next.js dev server (port 3000) works with zero config.
-- **Authentication**: None in v1 — localhost trust, no `OPENCODE_SERVER_PASSWORD`.
-- **SSE**: Native `EventSource` in browser client components. Not wrapped by SDK — use directly.
-- **File writes**: `client.file` is read-focused. Use Node.js `fs` module in Next.js API routes for writes.
-- **Working directory**: Always `~/Projects/pm-workspace`. This is where the agent's context lives (`memories/`, skills, `AGENTS.md`). Not the pm-workstation source directory.
+- **Fork repo**: `github.com/vitalii-b-dt/opencode`
+- **Local clone**: `~/Projects/opencode-fork` (separate from `pm-workstation`)
+- **PM workspace**: `~/Projects/pm-workspace` — where the agent's context lives (`memories/`, skills, `AGENTS.md`)
+- **Build**: `bun run build` inside `packages/app` produces the SolidJS web UI; full binary built via `bun run build` at repo root
+- **Dev**: Run `bun run dev` in `packages/app` to get hot-reload UI against a running OpenCode server
+- **PM feature files** (keep changes here to minimize rebase conflicts):
+  - `packages/app/src/pages/layout/sidebar-items.tsx` — add Memory Notes section to sidebar
+  - `packages/app/src/pages/session/session-side-panel.tsx` — add Memory tab to side panel
 
 ---
 
