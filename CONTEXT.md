@@ -129,16 +129,48 @@ PM Workstation is a fork of `sst/opencode`. PM-specific features (memory editor,
 └──────────────┘      └──────────────────┘
 ```
 
+### Repo structure — what is relevant
+
+The fork has 19 packages. Most are irrelevant to PM Workstation:
+
+| Package | Relevant? | Why |
+|---|---|---|
+| `packages/app/` | **Yes — work here** | SolidJS web UI; all PM features go here |
+| `packages/ui/` | **Yes, read-only** | Shared SolidJS component library; use but don't modify |
+| `packages/opencode/` | **No** | CLI/server engine; we are not changing agent logic |
+| `packages/desktop/` | **Later** | Tauri wrapper — needed for v1 distribution packaging |
+| `packages/desktop-electron/` | **Later** | Electron alternative — simpler than Tauri (no Rust) |
+| `packages/sdk/` | **No** | Auto-generated API client; don't touch |
+| Everything else | **No** | Cloud infra, marketing site, Slack, enterprise, extensions |
+
+### The fork does NOT use your globally installed OpenCode binary
+
+The fork is a self-contained copy of the full OpenCode source. In dev mode, `bun run dev` runs the TypeScript server directly — your global `opencode` CLI is not involved and not replaced. Only when you compile a release binary does it produce a new CLI.
+
+### Dev workflow (two terminals)
+
+```bash
+# Terminal 1 — server from source, pointed at your PM workspace
+cd ~/Projects/pm-workspace
+~/.bun/bin/bun run --cwd ~/Projects/opencode-fork/packages/opencode \
+  --conditions=browser src/index.ts serve --port 4096
+
+# Terminal 2 — SolidJS UI with hot reload
+cd ~/Projects/opencode-fork/packages/app
+~/.bun/bin/bun run dev
+# → http://localhost:3000, hot reload on every .tsx save
+```
+
 ### Key technical facts
 
 - **Fork repo**: `github.com/vitalii-b-dt/opencode`
 - **Local clone**: `~/Projects/opencode-fork` (separate from `pm-workstation`)
 - **PM workspace**: `~/Projects/pm-workspace` — where the agent's context lives (`memories/`, skills, `AGENTS.md`)
-- **Build**: `bun run build` inside `packages/app` produces the SolidJS web UI; full binary built via `bun run build` at repo root
-- **Dev**: Run `bun run dev` in `packages/app` to get hot-reload UI against a running OpenCode server
-- **PM feature files** (keep changes here to minimize rebase conflicts):
-  - `packages/app/src/pages/layout/sidebar-items.tsx` — add Memory Notes section to sidebar
-  - `packages/app/src/pages/session/session-side-panel.tsx` — add Memory tab to side panel
+- **Bun location**: `~/.bun/bin/bun` (installed 2026-03-30; add to PATH via `~/.zshrc`)
+- **Server**: Pure TypeScript/Bun — no Go, no Rust, no compilation step for dev
+- **PM feature files** (keep changes confined here to minimize rebase conflicts):
+  - `packages/app/src/pages/layout/sidebar-items.tsx` — sidebar nav items
+  - `packages/app/src/pages/session/session-side-panel.tsx` — side panel tabs
 
 ---
 
@@ -161,65 +193,85 @@ All four spike sessions completed successfully. Key deviations from RESEARCH.md 
 
 ## V1 Scope
 
-### Spike (completed)
-- [x] Health check / connection status indicator
-- [x] Session list and session creation
-- [x] Agent chat interface with streaming responses
-- [x] Markdown editor for `memories/` files
-- [x] Notes/file sidebar (list `memories/*.md`)
-- [x] Persistent layout (sidebar + main area)
+### Done (Phase 0 — Next.js spike, retired)
+- [x] Proven: OpenCode REST + SSE connection works from a browser client
+- [x] Proven: streaming agent responses work via `EventSource`
+- [x] Proven: `memories/*.md` files can be read and written from a web app
+- [x] Retired the Next.js sidecar approach — too much duplication of OpenCode's existing UI
 
-### v0.1 (next)
-- [ ] **Session history** — load prior messages when opening an existing session
-- [ ] **File preview canvas** — open any workspace file and view it rendered as markdown (no more VS Code for previewing agent output)
-- [ ] **Reassess Memory button** — in the notes panel, triggers a canned agent prompt to review the session and suggest memory file updates
-- [ ] **Cmd+S to save notes** — keyboard shortcut in addition to Save button
+### Done (Phase 1 setup — fork scaffolding)
+- [x] Fork created at `github.com/vitalii-b-dt/opencode` (v1.3.7)
+- [x] Local clone at `~/Projects/opencode-fork`, upstream remote added
+- [x] `bun install --ignore-scripts && bun run build` passes in `packages/app`
 
-### Out of scope for v0.1
-- Jira / Confluence / GitHub connectors (v0.2+)
-- Agent-triggered automatic memory file writes (v0.2+)
+### Next: PM features to add to the fork (in order)
+
+1. **Memory Editor panel** — highest priority; the core PM workflow
+   - File: `packages/app/src/pages/session/session-side-panel.tsx`
+   - New "Memory" tab in the side panel; lists `memories/*.md`, click to edit inline
+   - Save on Cmd+S
+
+2. **Reassess Memory button**
+   - File: `packages/app/src/pages/layout/sidebar-items.tsx`
+   - Button that fires a canned prompt to the active session
+
+3. **Canvas file preview** (rendered markdown, not raw diff)
+   - File: `packages/app/src/pages/session/session-side-panel.tsx`
+   - When a workspace `.md` file is open in the side panel, offer a rendered preview mode
+
+### Out of scope for v1
+- Jira / Confluence / GitHub connectors (v2+, MCP-side — no UI changes needed)
+- Agent-triggered automatic memory file writes
 - Roadmap or project board views
 - User onboarding flow
 - Auth / multi-user
-- Packaging as a native .app (Tauri)
-- Design polish / component library
 - Tests
 
 ---
 
 ## Decisions Made
 
-### Use Next.js App Router (not Pages Router)
-React/Next.js is the builder's existing experience. App Router gives a clean server/client component split that matches the SDK's server-vs-browser constraints well.
+### Fork OpenCode, not a sidecar app (2026-03-30)
+See Architecture section above. The sidecar Next.js approach was retired after the spike proved it duplicates what OpenCode already does better.
 
-### Editor: `@uiw/react-md-editor`
-React-native, markdown-focused, has split view (edit + preview). No heavy dependencies. Alternative considered: Milkdown (more extensible but more complex for a spike).
+### No new npm dependencies in the fork
+The fork already has a markdown renderer in `packages/ui/`. Use it. Adding dependencies increases rebase conflict surface and binary size.
 
-### Start with localhost web app, not packaged Tauri app
-Tauri requires Rust knowledge. A localhost web app validates the product concept without blocking on native packaging. Tauri wrapping comes after the concept is proven.
+### Mark all PM additions with `// PM WORKSTATION:` comments
+Makes rebasing easier — easy to grep for every PM-specific line when resolving conflicts.
 
 ### PM workspace directory is `pm-workspace`, not `pm-workstation`
-The agent's context (memories, skills, AGENTS.md) lives in the existing `pm-workspace` project. The `pm-workstation` directory is the source code of the UI application. The SDK `directory` parameter always points to `pm-workspace`.
+The agent's context (memories, skills, AGENTS.md) lives in `~/Projects/pm-workspace`. The fork source lives in `~/Projects/opencode-fork`. The `pm-workstation` repo is documentation only.
+
+### Packaging: Electron over Tauri for v1 distribution
+When packaging for other machines, prefer `packages/desktop-electron/` over `packages/desktop/` (Tauri). Electron requires no Rust toolchain, making agent-assisted builds practical. Tauri is an option if a smaller binary size becomes important later.
+
+### Start with dev mode, not packaged binary
+For the current phase (personal use + one external tester), running from source via `bun run dev` is sufficient. Package only when preparing to share more broadly.
 
 ---
 
 ## Open Questions (unresolved)
 
-1. **`client.file.write()` exists?** — Confirmed: not present. `fs` module in API routes is the permanent approach.
+1. **Markdown editor component in the fork** — OpenCode's side panel renders diffs and raw file content. It is not yet confirmed whether there is an existing editable markdown component in `packages/ui/` to reuse, or whether we need to wire in a minimal editor. Confirm before implementing the Memory Editor panel.
 
-2. **Localhost web app vs. packaged `.app`** — unknown whether target users will tolerate a browser-based tool or require a native app feel. Validate with the first external user.
+2. **How to write files from the SolidJS UI** — the fork's UI communicates with the OpenCode server via REST. Whether the server exposes a file-write endpoint for arbitrary workspace files (not just session outputs) needs to be verified. Fallback: add a thin API endpoint in `packages/opencode/src/server/`.
 
-3. **Name** — "PM Workstation" is a working title. A real name and GitHub repo slug TBD before any public sharing.
+3. **Localhost web app vs. packaged `.app`** — unknown whether target users will tolerate opening a browser tab or require a native app feel. Validate with the first external user before investing in Electron packaging.
+
+4. **Name** — "PM Workstation" is a working title. A real name and public-facing identity TBD before broader sharing.
+
+5. **Dev server confirmed working?** — `bun run build` in `packages/app` passes. `bun run dev` (Vite hot-reload) has not been tested end-to-end against the server yet. Do this at the start of the next implementation session.
 
 ---
 
-## Risks (from Pre-Mortem, 2026-03-25)
+## Risks
 
 | Risk | Severity | Status |
 |---|---|---|
 | No forcing function — side project stalls | High | Mitigate: public GitHub + 2 hrs/week commitment |
 | Onboarding too hard for later-adopter PMs | High | Launch blocker before external sharing |
-| Editor isn't the differentiator without agent context | Medium | Wire agent context sidebar in v0.1, not v0.3 |
-| SDK breaks without semver contract | Medium | Pin version; minimal integration surface |
-| Value prop not crisp enough | Elephant | Write it before writing code |
-| Solo builder — no external user catching blind spots | Elephant | Find one other AI-enabled PM from week 1 |
+| Rebase conflicts become expensive | Medium | Mitigate: changes confined to 2 files; agent handles rebase; ~30-60 min per 2-week window |
+| Upstream restructures the insertion point files | Medium | Happened once in 90 days (sidebar-items.tsx, +129/-113). Manageable but must be watched. |
+| No external user catching blind spots | High | Find one other AI-enabled PM before v1 is "done" |
+| Electron packaging complexity | Low | Not needed until distribution; Electron path is well-documented in the fork |

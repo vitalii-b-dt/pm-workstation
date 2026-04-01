@@ -41,8 +41,8 @@ Fork `sst/opencode` and add PM features natively to the SolidJS UI. Get 95% of O
 - [x] Fork `sst/opencode` on GitHub → `github.com/vitalii-b-dt/opencode` (forked at v1.3.7)
 - [x] Clone to `~/Projects/opencode-fork`
 - [x] Add upstream remote: `git remote add upstream https://github.com/sst/opencode`
-- [x] Confirm build works: `bun install --ignore-scripts && bun run build` in `packages/app` — passes cleanly
-- [ ] Confirm dev server works: `bun run dev` in `packages/app` (not yet tested)
+- [x] Confirm build works: `bun install --ignore-scripts && bun run build` in `packages/app` — passes cleanly in 9.6s
+- [ ] Confirm dev server works end-to-end: `bun run dev` in `packages/app` + server from source in Terminal 1 (do this at the start of the next session)
 
 ### PM Features to Add (in order)
 
@@ -81,11 +81,35 @@ Update this table after every rebase.
 
 - Find one other AI-enabled PM to test with
 - Gather feedback on memory editor UX
-- Decide whether Tauri packaging is needed or localhost web app is acceptable
+- Decide whether Tauri/Electron packaging is needed or running from source is acceptable for this user
 
 ---
 
-## Phase 3: Connectors (FUTURE, v0.2+)
+## Packaging Reference (when ready)
+
+Two options exist in the fork:
+
+**Option A — Replace the global CLI binary (for personal use / one tester):**
+```bash
+cd ~/Projects/opencode-fork/packages/opencode
+~/.bun/bin/bun run script/build.ts
+# Output: dist/opencode-darwin-arm64/bin/opencode
+# Copy that binary to the other machine; it is self-contained
+```
+
+**Option B — Full desktop installer (Electron, preferred over Tauri):**
+```bash
+cd ~/Projects/opencode-fork/packages/desktop-electron
+# Electron build — no Rust required
+npx electron-builder
+# Produces: .dmg (macOS), NSIS installer (Windows), .AppImage/.deb (Linux)
+```
+
+Tauri (`packages/desktop/`) produces smaller binaries but requires Rust + Cargo. Use Electron first.
+
+---
+
+## Phase 3: Connectors (FUTURE, v2+)
 
 - Jira MCP integration (read issues, write comments)
 - Confluence MCP integration (read pages, write drafts)
